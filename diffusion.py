@@ -7,12 +7,12 @@ import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 from torchvision import transforms
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from random import randint
-from unet import device
+
 
 class Diffusion:
-  def __init__(self,T,model,save_path,schedule_type="linear",scale=None):
+  def __init__(self,T,model,save_path,schedule_type="linear",device="cuda:0",scale=None):
     self.device = device
     # self.device = "cpu"
     self.T = T
@@ -181,7 +181,7 @@ class Diffusion:
     # xt_minus_1,_ = self.forward_process(gt,torch.clamp(ts,min=0),noise=targets)
     # predicts = self.backward_step(xt,ts,eps = predicts)
     return torch.mean(((targets-predicts)**2)*full_weight)
-  def train_model(self,epoch,dataloader,lr,save_interval = 20):
+  def train_model(self,epoch,dataloader,lr,ratio=1,save_interval = 20):
     import torch.optim as optim
     import os.path
     if not os.path.exists(self.save_path):
@@ -205,28 +205,25 @@ class Diffusion:
         
         # Calculate car loss first
         output = self.model(x_t,t,emp,car,xy)
-        # t2 =transforms.Compose([
-        #     transforms.Lambda(lambda t: (t + 1) / 2),
-        #     transforms.ToPILImage(),
-        # ])
-        # t2(gt[0]).save("/home/fish/OursDiffusion/testimg/gt.png")
-        loss_c = self.weighted_mse(output,noise,xy,xylen,1000,"car")
+        loss_c = self.weighted_mse(output,noise,xy,xylen,1,"car")
         loss_c_cpu = loss_c.cpu().item()
-        loss_c.backward()
-        opt.step()
+        # loss_c.backward()
+        # opt.step()
         all_loss_c+=loss_c_cpu
-        opt.zero_grad()
+        # opt.zero_grad()
 
         # Calculate road loss second
         # output = self.model(x_t,t,emp,car,xy)
-        # loss_r = self.weighted_mse(output,noise,xy,1,"road")
-        # loss_r_cpu = loss_r.cpu().item()
+        loss_r = self.weighted_mse(output,noise,xy,xylen,10,"road")
+        loss_r_cpu = loss_r.cpu().item()
+        loss_sum = loss_r+loss_c
+        loss_sum.backward()
         # loss_r.backward()
-        # opt.step()
-        # all_loss_r+=loss_r_cpu
-        # opt.zero_grad()
+        opt.step()
+        all_loss_r+=loss_r_cpu
+        opt.zero_grad()
         loop.set_description(f'Epoch [{E+1}/{epoch}]')
-        loop.set_postfix(loss=loss_c_cpu)
+        loop.set_postfix(loss=loss_r_cpu+loss_c_cpu)
       print("Avg loss_road at epoch {}:".format(E),all_loss_r/len(dataloader))
       print("Avg loss_car at epoch {}:".format(E),all_loss_c/len(dataloader))
       if E % save_interval == 0:

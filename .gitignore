@@ -1,0 +1,11 @@
+*.pth
+save_VNC/
+utils/
+__pycache__
+dataset_from_VNC
+milesAE
+bad_data
+dataset
+dataset_small
+save
+models
