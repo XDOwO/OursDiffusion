@@ -214,7 +214,7 @@ class Diffusion:
 
         # Calculate road loss second
         # output = self.model(x_t,t,emp,car,xy)
-        loss_r = self.weighted_mse(output,noise,xy,xylen,10,"road")
+        loss_r = self.weighted_mse(output,noise,xy,xylen,ratio,"road")
         loss_r_cpu = loss_r.cpu().item()
         loss_sum = loss_r+loss_c
         loss_sum.backward()

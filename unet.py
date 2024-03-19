@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch
 import math
 
-
-
 class MultipleSequential(nn.Sequential):
   def forward(self,x,emb,*unused):
     for layer in self:
@@ -33,6 +31,7 @@ class T_R_C_X_Embedding(nn.Module):
     :param cars: 2-D tensor. The shape should be (batch,1024)
     :param xys: 2/3-D tensor. The shape should be (batch,32) or (batch,16,2)
     '''
+    
     B,D = cars.shape[:2]
     assert cars.shape[1] == rds.shape[1], "rds.shape[1]({}) shoudl be the same as cars.shape[1]({})".format(rds.shape[1],cars.shape[1])
     cars = self.carnn(self.norm(cars))
@@ -49,7 +48,7 @@ class T_R_C_X_Embedding(nn.Module):
     half = self.output_dim // 2
     freqs = torch.exp(
       -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-    ).to(device)
+    ).to(timesteps.device)
     args = timesteps[:, None].float() * freqs[None]
     emb_time = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
     if self.output_dim % 2:
@@ -144,6 +143,7 @@ class Unet(nn.Module):
     self.ch_mult = ch_mult
     self.num_heads = num_heads
     self.emb_ch = model_ch * time_emb_mult
+    self.trcx_emb = T_R_C_X_Embedding(xy_nums=32,output_dim=self.model_ch)
 
     self.emb_block = nn.Sequential(nn.Linear(model_ch,self.emb_ch),
                                    nn.SiLU(),
@@ -188,12 +188,12 @@ class Unet(nn.Module):
     :param cars: 2-D tensor. The shape should be (batch,1024)
     :param xys: 2/3-D tensor. The shape should be (batch,32) or (batch,16,2)
     '''
-    if len(xys.shape)==3:
-      xy_nums = xys.shape[-2]*xys.shape[-1]
-    elif len(xys.shape)==2:
-      xy_nums = xys.shape[-1]
-    trcx_emb = T_R_C_X_Embedding(xy_nums=xy_nums,output_dim=self.model_ch).to(device)
-    emb = self.emb_block(trcx_emb(timesteps,rds,cars,xys))
+    # if len(xys.shape)==3:
+    #   xy_nums = xys.shape[-2]*xys.shape[-1]
+    # elif len(xys.shape)==2:
+    #   xy_nums = xys.shape[-1]
+    # trcx_emb = T_R_C_X_Embedding(xy_nums=xy_nums,output_dim=self.model_ch)
+    emb = self.emb_block(self.trcx_emb(timesteps,rds,cars,xys))
 
     x = self.inn(x)
     skip_connection = []
